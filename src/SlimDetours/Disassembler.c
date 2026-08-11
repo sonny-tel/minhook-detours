@@ -84,6 +84,7 @@
 typedef struct _DETOUR_DISASM
 {
     BOOL    bOperandOverride;
+    BOOL    bTargetOverflow;
     BOOL    bAddressOverride;
     BOOL    bRaxOverride; // AMD64 only
     BOOL    bVex;
@@ -108,6 +109,7 @@ detour_disasm_init(
     _Out_opt_ LONG* plExtra)
 {
     pDisasm->bOperandOverride = FALSE;
+    pDisasm->bTargetOverflow = FALSE;
     pDisasm->bAddressOverride = FALSE;
     pDisasm->bRaxOverride = FALSE;
     pDisasm->bF2 = FALSE;
@@ -977,6 +979,12 @@ AdjustTarget(
     LONG_PTR nNewOffset;
     PVOID pvTargetAddr = &pbDst[cbTargetOffset];
 
+#if defined(_AMD64_)
+    const BOOL bScratchDestination =
+        (ULONG_PTR)pbDst >= (ULONG_PTR)pDisasm->rbScratchDst &&
+        (ULONG_PTR)pbDst < (ULONG_PTR)(pDisasm->rbScratchDst + sizeof(pDisasm->rbScratchDst));
+#endif
+
     switch (cbTargetSize)
     {
         case 1:
@@ -1020,10 +1028,12 @@ AdjustTarget(
             break;
         case 4:
             *(UNALIGNED LONG*)pvTargetAddr = (LONG)nNewOffset;
-            if (nNewOffset < LONG_MIN || nNewOffset > LONG_MAX)
+#if defined(_AMD64_)
+            if ((nNewOffset < LONG_MIN || nNewOffset > LONG_MAX) && !bScratchDestination)
             {
-                *pDisasm->plExtra = sizeof(ULONG) - 4;
+                pDisasm->bTargetOverflow = TRUE;
             }
+#endif
             break;
 #if defined(_AMD64_)
         case 8:
@@ -1036,7 +1046,7 @@ AdjustTarget(
     // far apart, distance not encodable in 32bits. Ok.
     // At least still check the lower 32bits.
 
-    if (pbDst >= pDisasm->rbScratchDst && pbDst < (sizeof(pDisasm->rbScratchDst) + pDisasm->rbScratchDst))
+    if (bScratchDestination)
     {
         ASSERT((((size_t)pbDst + cbOp + nNewOffset) & 0xFFFFFFFF) == (((size_t)pbTarget) & 0xFFFFFFFF));
     } else
@@ -2697,7 +2707,8 @@ SlimDetoursCopyInstruction(
 
 #if defined(_AMD64_) || defined(_X86_)
     detour_disasm_init(&Disasm, (PBYTE*)ppTarget, plExtra);
-    return (PVOID)CopyInstruction(&Disasm, (PBYTE)pDst, (PBYTE)pSrc);
+    PVOID pNextInstruction = (PVOID)CopyInstruction(&Disasm, (PBYTE)pDst, (PBYTE)pSrc);
+    return Disasm.bTargetOverflow ? NULL : pNextInstruction;
 #elif defined(_ARM64_)
     detour_disasm_init(&Disasm);
     return (PVOID)CopyInstruction(&Disasm,

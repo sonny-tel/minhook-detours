@@ -169,6 +169,12 @@ enum
 };
 
 #if defined(_X86_) || defined(_AMD64_)
+#if defined(_AMD64_)
+BOOL
+detour_is_jmp_immediate_reachable(
+    _In_ PBYTE pbCode,
+    _In_ PBYTE pbJmpVal);
+#endif
 
 _Ret_notnull_
 PBYTE

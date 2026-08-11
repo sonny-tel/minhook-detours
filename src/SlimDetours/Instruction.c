@@ -107,6 +107,18 @@ detour_is_imported(
 }
 
 #if defined(_X86_) || defined(_AMD64_)
+#if defined(_AMD64_)
+BOOL
+detour_is_jmp_immediate_reachable(
+    _In_ PBYTE pbCode,
+    _In_ PBYTE pbJmpVal)
+{
+    LONGLONG nOffset =
+        (LONGLONG)(ULONG_PTR)pbJmpVal -
+        (LONGLONG)(ULONG_PTR)(pbCode + SIZE_OF_JMP);
+    return nOffset >= LONG_MIN && nOffset <= LONG_MAX;
+}
+#endif
 
 _Ret_notnull_
 PBYTE

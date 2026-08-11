@@ -369,6 +369,14 @@ fail:
         DETOUR_BREAK();
         goto fail;
     }
+#if defined(_AMD64_)
+    if (!detour_is_jmp_immediate_reachable(pbTarget, pTrampoline->rbCodeIn))
+    {
+        Status = STATUS_NO_MEMORY;
+        DETOUR_BREAK();
+        goto fail;
+    }
+#endif
 
     DETOUR_TRACE("detours: pbTramp=%p, pDetour=%p\n", pTrampoline, pDetour);
 
